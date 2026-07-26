@@ -101,14 +101,15 @@
         </div>
     </div>
 
-    <script>
+   <script>
     // =========================================================================
-    // 1. KONFIGURASI URL APPS SCRIPT
+    // 1. DUA ENDPOINT WEB APP TERPISAH
     // =========================================================================
-    const serverUrl = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
+    const serverUrlProduk  = "https://script.google.com/macros/s/AKfycbzPlF6_g98uy5XjwACBORVJZxiFsf6UJzoBesu0U_9BKmXQcXMi7fqHhpq1S29CaHeX/exec";
+    const serverUrlPayment = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
 
     const urlParams = new URLSearchParams(window.location.search);
-    const namaProdukURL = urlParams.get('produk') || 'logo_kotakita'; // Default nama produk
+    const namaProdukURL = urlParams.get('produk') || 'logo_kotakita'; 
 
     let targetNominal = 0;
     let listLinkDownload = [];
@@ -118,14 +119,14 @@
     };
 
     // =========================================================================
-    // 2. INI FUNGSI AMBIL DATA DINAMIS DARI GOOGLE SHEET
+    // 2. INTI LOGIKA AMBIL DATA DARI SHEET PRODUK
     // =========================================================================
     async function initAplikasiDinamis() {
         document.getElementById("status-text").innerText = "Mengambil data produk...";
 
         try {
-            // Fetch produk dari Google Sheet via Apps Script
-            const res = await fetch(`${serverUrl}?get_produk=${encodeURIComponent(namaProdukURL)}`);
+            // Tembak ke serverUrlProduk
+            const res = await fetch(`${serverUrlProduk}?get_produk=${encodeURIComponent(namaProdukURL)}`);
             const data = await res.json();
 
             if (data.status === "SUCCESS") {
@@ -136,15 +137,15 @@
                 const kodeUnik = Math.floor(Math.random() * 199) + 1;
                 targetNominal = hargaDasarInput + kodeUnik;
 
-                // Tampilkan nominal ke UI
+                // Tampilkan ke UI
                 document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
                 document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
                 document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
 
-                // Mulai polling cek pembayaran otomatis
+                // Mulai polling cek status pembayaran
                 mulaiPollingPembayaran();
             } else {
-                document.getElementById("status-text").innerText = "❌ Produk tidak ditemukan di Database!";
+                document.getElementById("status-text").innerText = "❌ Produk tidak ditemukan!";
                 alert("Produk tidak ditemukan dalam sistem.");
             }
         } catch (error) {
@@ -153,11 +154,11 @@
         }
     }
 
-    // Jalankan sistem saat halaman selesai dimuat
+    // Jalankan otomatis saat web dibuka
     window.addEventListener('DOMContentLoaded', initAplikasiDinamis);
 
     // =========================================================================
-    // 3. LOGIKA CEK PEMBAYARAN & DOWNLOAD
+    // 3. LOGIKA CEK PEMBAYARAN KE SHEET PAYMENT
     // =========================================================================
     let checkInterval = null;
 
@@ -167,7 +168,8 @@
 
             const noHpPelanggan = urlParams.get('no_hp') || '';
 
-            fetch(`${serverUrl}?check_nominal=${targetNominal}&no_hp=${noHpPelanggan}`)
+            // Tembak ke serverUrlPayment
+            fetch(`${serverUrlPayment}?gid=0&check_nominal=${targetNominal}&no_hp=${noHpPelanggan}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data && (data.status === "PAID" || data.status === "SUCCESS" || data.status === "SUKSES" || data.status === "BERHASIL" || data.status === "LUNAS")) {
@@ -178,7 +180,7 @@
     }
 
     function bukaModalQRIS() {
-        if (targetNominal <= 0) { alert("Data produk belum dimuat!"); return; }
+        if (targetNominal <= 0) { alert("Data produk belum selesai dimuat!"); return; }
         const modal = document.getElementById('qris-modal');
         modal.classList.remove('opacity-0', 'pointer-events-none');
         modal.classList.add('opacity-100');
@@ -194,7 +196,10 @@
         if (checkInterval) clearInterval(checkInterval);
         tutupModalQRIS();
 
+        // Sembunyikan kartu pembayaran
         document.getElementById("card-pembayaran").style.display = "none";
+
+        // Render tombol download
         const container = document.getElementById("container-tombol-download");
         container.innerHTML = "";
 
