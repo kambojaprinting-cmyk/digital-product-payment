@@ -69,7 +69,7 @@
     <!-- 2. KARTU SUKSES (MENDUKUNG MULTIPLE DOWNLOAD) -->
     <div id="card-sukses" style="display: none; background-color: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-width: 384px; width: 100%; text-align: center; border: 1px solid #f3f4f6; margin: auto;">
         
-        <div style="width: 56px; height: 56px; background-color: #d1fae5; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 56px; height: 56px; background-color: #d1fae5; border-radius: 50%; margin: 0 auto 16px; display: flex; items-center; justify-content: center;">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 28px; height: 28px;">
                 <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
@@ -82,7 +82,6 @@
             File Anda sedang diunduh secara otomatis. Jika unduhan tidak berjalan, klik tombol di bawah ini:
         </p>
 
-        <!-- Container Tombol Download Dinamis -->
         <div id="container-tombol-download" style="display: flex; flex-direction: column; gap: 10px;"></div>
     </div>
 
@@ -102,147 +101,117 @@
         </div>
     </div>
 
-<script>
-    const serverUrl = "https://script.google.com/macros/s/AKfycbzPlF6_g98uy5XjwACBORVJZxiFsf6UJzoBesu0U_9BKmXQcXMi7fqHhpq1S29CaHeX/exec";
-    const urlParams = new URLSearchParams(window.location.search);
-    const namaProdukURL = urlParams.get('produk') || 'ebook_happiness_meditation'; // Default slug
+    <script>
+        const serverUrl = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
+        const urlParams = new URLSearchParams(window.location.search);
+        const namaProdukURL = urlParams.get('produk') || 'kotakita';
 
-    let targetNominal = 0;
-    let listLinkDownload = [];
-    let hargaDasarInput = 0;
+        let targetNominal = 0;
+        let listLinkDownload = [];
+        let hargaDasarInput = 15000;
 
-    const formatRupiah = (angka) => {
-        return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    };
+        const formatRupiah = (angka) => {
+            return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        };
 
-    // =========================================================================
-    // 1. AMBIL DATA PRODUK DARI GOOGLE SHEET
-    // =========================================================================
-    async function muatDataProduk() {
-        try {
-            document.getElementById("status-text").innerText = "Memuat data produk...";
-            
-            // Ambil data produk dari Google Apps Script
-            const response = await fetch(`${serverUrl}?get_produk=true`);
-            const dbProduk = await response.json();
+        // 1. Dapatkan data produk dinamis dari Google Sheet
+        async function muatDataProduk() {
+            try {
+                const response = await fetch(`${serverUrl}?get_produk=true`);
+                const dbProduk = await response.json();
 
-            console.log("Data Produk dari Sheet:", dbProduk);
+                let produkPilihan = dbProduk[namaProdukURL];
+                if (!produkPilihan) {
+                    const firstKey = Object.keys(dbProduk)[0];
+                    produkPilihan = dbProduk[firstKey];
+                }
 
-            // Cari produk berdasarkan parameter URL
-            let produkPilihan = dbProduk[namaProdukURL];
-            
-            // Jika tidak ketemu berdasarkan key URL, ambil produk baris pertama di Sheet
-            if (!produkPilihan) {
-                const firstKey = Object.keys(dbProduk)[0];
-                produkPilihan = dbProduk[firstKey];
+                if (produkPilihan) {
+                    hargaDasarInput = Number(produkPilihan.harga) || 15000;
+                    listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
+                }
+            } catch (err) {
+                console.log("Menggunakan fallback default");
             }
-
-            // Pastikan harga dikonversi ke Tipe Number
-            if (produkPilihan) {
-                hargaDasarInput = Number(produkPilihan.harga) || 0;
-                listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
-            } else {
-                hargaDasarInput = 10000;
-                listLinkDownload = [];
-            }
-
-            // Jalankan kalkulasi nominal unik
-            jalankanKalkulasiAwal();
-            document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
-            
-        } catch (err) {
-            console.error("Gagal memuat produk dari GAS:", err);
-            document.getElementById("status-text").innerText = "Gagal terhubung ke server database produk.";
-            
-            // Fallback default aman
-            hargaDasarInput = 15000;
             jalankanKalkulasiAwal();
         }
-    }
 
-    // =========================================================================
-    // FUNGSI KALKULASI KODE UNIK (YANG SEBELUMNYA TERHAPUS)
-    // =========================================================================
-    function jalankanKalkulasiAwal() {
-        const kodeUnik = Math.floor(Math.random() * 199) + 1;
-        targetNominal = hargaDasarInput + kodeUnik;
+        function jalankanKalkulasiAwal() {
+            const kodeUnik = Math.floor(Math.random() * 199) + 1;
+            targetNominal = hargaDasarInput + kodeUnik;
 
-        document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
-        document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
-    }
+            document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
+            document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
+        }
 
-    window.addEventListener('DOMContentLoaded', muatDataProduk);
+        window.addEventListener('DOMContentLoaded', muatDataProduk);
 
-    // =========================================================================
-    // 2. CHECKER STATUS PEMBAYARAN AUTOMATIC
-    // =========================================================================
-    const checkInterval = setInterval(() => {
-        if (targetNominal <= 0) return; 
+        // 2. Loop Pengecekan Pembayaran (Setiap 4 Detik)
+        const checkInterval = setInterval(() => {
+            if (targetNominal <= 0) return; 
 
-        const noHpPelanggan = urlParams.get('no_hp') || '';
+            fetch(`${serverUrl}?check_nominal=${targetNominal}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.status === "SUCCESS") {
+                        prosesPembayaranSukses();
+                    }
+                }).catch(()=>{});
+        }, 4000);
 
-        fetch(`${serverUrl}?gid=0&check_nominal=${targetNominal}&no_hp=${noHpPelanggan}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && (data.status === "PAID" || data.status === "SUCCESS" || data.status === "SUKSES" || data.status === "BERHASIL" || data.status === "LUNAS")) {
-                    prosesPembayaranSukses();
-                }
-            }).catch(()=>{});
-    }, 4000);
+        function bukaModalQRIS() {
+            if (targetNominal <= 0) { alert("Belum ada nominal transaksi!"); return; }
+            const modal = document.getElementById('qris-modal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100');
+        }
 
-    function bukaModalQRIS() {
-        if (targetNominal <= 0) { alert("Belum ada nominal transaksi!"); return; }
-        const modal = document.getElementById('qris-modal');
-        modal.classList.remove('opacity-0', 'pointer-events-none');
-        modal.classList.add('opacity-100');
-    }
+        function tutupModalQRIS() {
+            const modal = document.getElementById('qris-modal');
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
 
-    function tutupModalQRIS() {
-        const modal = document.getElementById('qris-modal');
-        modal.classList.remove('opacity-100');
-        modal.classList.add('opacity-0', 'pointer-events-none');
-    }
+        function prosesPembayaranSukses() {
+            clearInterval(checkInterval);
+            tutupModalQRIS(); 
 
-    function prosesPembayaranSukses() {
-        clearInterval(checkInterval);
-        tutupModalQRIS(); 
+            document.getElementById("card-pembayaran").style.display = "none";
 
-        document.getElementById("card-pembayaran").style.display = "none";
+            const container = document.getElementById("container-tombol-download");
+            container.innerHTML = "";
 
-        const container = document.getElementById("container-tombol-download");
-        container.innerHTML = "";
+            listLinkDownload.forEach((link, index) => {
+                window.open(link, '_blank');
 
-        listLinkDownload.forEach((link, index) => {
-            window.open(link, '_blank');
+                const btn = document.createElement("a");
+                btn.href = link;
+                btn.target = "_blank";
+                btn.rel = "noopener noreferrer";
+                btn.style.cssText = "display: block; width: 100%; background-color: #16a34a; color: #ffffff; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-family: sans-serif; box-sizing: border-box;";
+                
+                btn.innerText = listLinkDownload.length > 1 ? `📥 DOWNLOAD FILE LOGO #${index + 1}` : `📥 DOWNLOAD FILE LOGO SEKARANG`;
+                container.appendChild(btn);
+            });
 
-            const btn = document.createElement("a");
-            btn.href = link;
-            btn.target = "_blank";
-            btn.rel = "noopener noreferrer";
-            btn.style.cssText = "display: block; width: 100%; background-color: #16a34a; color: #ffffff; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-family: sans-serif; box-sizing: border-box;";
-            
-            btn.innerText = listLinkDownload.length > 1 ? `📥 DOWNLOAD FILE LOGO #${index + 1}` : `📥 DOWNLOAD FILE LOGO SEKARANG`;
-            container.appendChild(btn);
-        });
+            document.getElementById("card-sukses").style.display = "block";
+        }
 
-        document.getElementById("card-sukses").style.display = "block";
-    }
+        function eksekusiSalin(text) {
+            const el = document.createElement('textarea'); el.value = text;
+            el.setAttribute('readonly', ''); el.style.position = 'absolute'; el.style.left = '-9999px';
+            document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+        }
 
-    function eksekusiSalin(text) {
-        const el = document.createElement('textarea'); el.value = text;
-        el.setAttribute('readonly', ''); el.style.position = 'absolute'; el.style.left = '-9999px';
-        document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-    }
+        function salinTeks(text, jenis) { eksekusiSalin(text); ubahNotifikasiStatus(`Nomor ${jenis} berhasil disalin!`); }
+        function salinNominalSah() { if (targetNominal <= 0) return; eksekusiSalin(targetNominal.toString()); ubahNotifikasiStatus(`Nominal ${formatRupiah(targetNominal)} disalin!`); }
 
-    function salinTeks(text, jenis) { eksekusiSalin(text); ubahNotifikasiStatus(`Nomor ${jenis} berhasil disalin!`); }
-    function salinNominalSah() { if (targetNominal <= 0) return; eksekusiSalin(targetNominal.toString()); ubahNotifikasiStatus(`Nominal ${formatRupiah(targetNominal)} disalin!`); }
-
-    function ubahNotifikasiStatus(pesan) {
-        const statusText = document.getElementById("status-text");
-        const originalText = statusText.innerText;
-        statusText.innerText = pesan; statusText.classList.remove("text-gray-500"); statusText.classList.add("text-green-600", "font-semibold");
-        setTimeout(() => { statusText.innerText = originalText; statusText.classList.remove("text-green-600", "font-semibold"); statusText.classList.add("text-gray-500"); }, 2000);
-    }
-</script>
+        function ubahNotifikasiStatus(pesan) {
+            const statusText = document.getElementById("status-text");
+            const originalText = statusText.innerText;
+            statusText.innerText = pesan; statusText.classList.remove("text-gray-500"); statusText.classList.add("text-green-600", "font-semibold");
+            setTimeout(() => { statusText.innerText = originalText; statusText.classList.remove("text-green-600", "font-semibold"); statusText.classList.add("text-gray-500"); }, 2000);
+        }
+    </script>
 </body>
 </html>
