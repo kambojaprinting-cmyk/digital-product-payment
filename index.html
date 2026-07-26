@@ -12,7 +12,7 @@
 </head>
 <body class="bg-gray-50 flex flex-col items-center justify-center min-h-screen p-4 select-none">
 
-    <!-- KARTU UTAMA PEMBAYARAN -->
+    <!-- 1. KARTU UTAMA PEMBAYARAN -->
     <div id="card-pembayaran" class="bg-white p-5 sm:p-6 rounded-2xl shadow-lg max-w-sm w-full text-center border border-gray-100 my-auto">
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Total Pembayaran</h2>
         
@@ -62,14 +62,14 @@
 
         <div class="flex flex-col items-center justify-center space-y-1.5 border-t border-gray-100 pt-3 mt-3">
             <div id="status-spinner" class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <p id="status-text" class="text-[11px] text-gray-500 animate-pulse">Menghubungkan ke database produk...</p>
+            <p id="status-text" class="text-[11px] text-gray-500 animate-pulse">Menunggu nominal transaksi Anda terdeteksi...</p>
         </div>
     </div>
 
-    <!-- KARTU SUKSES -->
+    <!-- 2. KARTU SUKSES (MENDUKUNG MULTIPLE DOWNLOAD) -->
     <div id="card-sukses" style="display: none; background-color: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-width: 384px; width: 100%; text-align: center; border: 1px solid #f3f4f6; margin: auto;">
         
-        <div style="width: 56px; height: 56px; background-color: #d1fae5; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+        <div style="width: 56px; height: 56px; background-color: #d1fae5; border-radius: 50%; margin: 0 auto 16px; display: flex; items-center; justify-content: center;">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 28px; height: 28px;">
                 <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
@@ -108,44 +108,35 @@
 
         let targetNominal = 0;
         let listLinkDownload = [];
-        let hargaDasarInput = 0;
+        let hargaDasarInput = 15000;
 
         const formatRupiah = (angka) => {
             return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
         };
 
-        // AMBIL DATA 100% DINAMIS DARI GOOGLE SHEET PRODUK
+        // 1. Dapatkan data produk dinamis dari Google Sheet
         async function muatDataProduk() {
             try {
-                document.getElementById("status-text").innerText = "Memuat harga & produk dari Google Sheet...";
-                
                 const response = await fetch(`${serverUrl}?get_produk=true`);
                 const dbProduk = await response.json();
 
                 let produkPilihan = dbProduk[namaProdukURL];
-                
-                // Jika slug URL tidak cocok, otomatis ambil produk baris pertama di Google Sheet
                 if (!produkPilihan) {
                     const firstKey = Object.keys(dbProduk)[0];
                     produkPilihan = dbProduk[firstKey];
                 }
 
                 if (produkPilihan) {
-                    hargaDasarInput = Number(produkPilihan.harga) || 0;
+                    hargaDasarInput = Number(produkPilihan.harga) || 15000;
                     listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
-                    document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
-                } else {
-                    document.getElementById("status-text").innerText = "Produk tidak ditemukan di Google Sheet.";
                 }
             } catch (err) {
-                console.error("Gagal mengambil data dari Google Sheet:", err);
-                document.getElementById("status-text").innerText = "Gagal terhubung ke Google Sheet.";
+                console.log("Menggunakan fallback default");
             }
             jalankanKalkulasiAwal();
         }
 
         function jalankanKalkulasiAwal() {
-            if (hargaDasarInput <= 0) return;
             const kodeUnik = Math.floor(Math.random() * 199) + 1;
             targetNominal = hargaDasarInput + kodeUnik;
 
@@ -155,7 +146,7 @@
 
         window.addEventListener('DOMContentLoaded', muatDataProduk);
 
-        // CHECKER AUTOMATIC MUTASI
+        // 2. Loop Pengecekan Pembayaran (Setiap 4 Detik)
         const checkInterval = setInterval(() => {
             if (targetNominal <= 0) return; 
 
@@ -191,17 +182,10 @@
             container.innerHTML = "";
 
             listLinkDownload.forEach((link, index) => {
-                let cleanLink = String(link).trim();
-
-                // Paksa prefix https:// agar link Google Drive dari Sheet tidak 404
-                if (!cleanLink.startsWith("http://") && !cleanLink.startsWith("https://")) {
-                    cleanLink = "https://" + cleanLink;
-                }
-
-                window.open(cleanLink, '_blank');
+                window.open(link, '_blank');
 
                 const btn = document.createElement("a");
-                btn.href = cleanLink;
+                btn.href = link;
                 btn.target = "_blank";
                 btn.rel = "noopener noreferrer";
                 btn.style.cssText = "display: block; width: 100%; background-color: #16a34a; color: #ffffff; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-family: sans-serif; box-sizing: border-box;";
