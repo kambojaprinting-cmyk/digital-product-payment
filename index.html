@@ -102,59 +102,67 @@
     </div>
 
     <script>
+    // =========================================================================
+    // 1. KONFIGURASI URL APPS SCRIPT
+    // =========================================================================
     const serverUrl = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
 
-    // URL Parameter (?produk=...)
     const urlParams = new URLSearchParams(window.location.search);
-    const namaProdukURL = urlParams.get('produk') || 'ebook_happiness_meditation';
+    const namaProdukURL = urlParams.get('produk') || 'logo_kotakita'; // Default nama produk
 
     let targetNominal = 0;
-    let hargaDasarInput = 0;
     let listLinkDownload = [];
 
     const formatRupiah = (angka) => {
         return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     };
 
-    // 1. FETCH DATA PRODUK DARI GOOGLE SHEET
-    async function muatDataProduk() {
+    // =========================================================================
+    // 2. INI FUNGSI AMBIL DATA DINAMIS DARI GOOGLE SHEET
+    // =========================================================================
+    async function initAplikasiDinamis() {
         document.getElementById("status-text").innerText = "Mengambil data produk...";
-        
+
         try {
-            const response = await fetch(`${serverUrl}?get_produk=${namaProdukURL}`);
-            const data = await response.json();
+            // Fetch produk dari Google Sheet via Apps Script
+            const res = await fetch(`${serverUrl}?get_produk=${encodeURIComponent(namaProdukURL)}`);
+            const data = await res.json();
 
             if (data.status === "SUCCESS") {
-                hargaDasarInput = data.harga;
+                const hargaDasarInput = data.harga;
                 listLinkDownload = data.links;
-                jalankanKalkulasiAwal();
+
+                // Hitung kode unik
+                const kodeUnik = Math.floor(Math.random() * 199) + 1;
+                targetNominal = hargaDasarInput + kodeUnik;
+
+                // Tampilkan nominal ke UI
+                document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
+                document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
+                document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
+
+                // Mulai polling cek pembayaran otomatis
+                mulaiPollingPembayaran();
             } else {
-                document.getElementById("status-text").innerText = "⚠️ Produk tidak ditemukan!";
+                document.getElementById("status-text").innerText = "❌ Produk tidak ditemukan di Database!";
+                alert("Produk tidak ditemukan dalam sistem.");
             }
         } catch (error) {
+            document.getElementById("status-text").innerText = "❌ Gagal terhubung ke Database Produk.";
             console.error("Gagal mengambil data produk:", error);
-            document.getElementById("status-text").innerText = "⚠️ Gagal terhubung ke database!";
         }
     }
 
-    // 2. HITUNG KODE UNIK & DISPLAY
-    function jalankanKalkulasiAwal() {
-        const kodeUnik = Math.floor(Math.random() * 199) + 1;
-        targetNominal = hargaDasarInput + kodeUnik;
+    // Jalankan sistem saat halaman selesai dimuat
+    window.addEventListener('DOMContentLoaded', initAplikasiDinamis);
 
-        document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
-        document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
-        document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
-        
-        // Mulai polling cek status pembayaran
-        mulaiPollingPembayaran();
-    }
+    // =========================================================================
+    // 3. LOGIKA CEK PEMBAYARAN & DOWNLOAD
+    // =========================================================================
+    let checkInterval = null;
 
-    window.addEventListener('DOMContentLoaded', muatDataProduk);
-
-    // 3. POLLING CEK PEMBAYARAN LUNAS
     function mulaiPollingPembayaran() {
-        const checkInterval = setInterval(() => {
+        checkInterval = setInterval(() => {
             if (targetNominal <= 0) return;
 
             const noHpPelanggan = urlParams.get('no_hp') || '';
@@ -162,15 +170,13 @@
             fetch(`${serverUrl}?check_nominal=${targetNominal}&no_hp=${noHpPelanggan}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data && (data.status === "SUCCESS" || data.status === "PAID" || data.status === "LUNAS")) {
-                        clearInterval(checkInterval);
+                    if (data && (data.status === "PAID" || data.status === "SUCCESS" || data.status === "SUKSES" || data.status === "BERHASIL" || data.status === "LUNAS")) {
                         prosesPembayaranSukses();
                     }
                 }).catch(() => {});
         }, 4000);
     }
 
-    // 4. FITUR MODAL & UTILITY
     function bukaModalQRIS() {
         if (targetNominal <= 0) { alert("Data produk belum dimuat!"); return; }
         const modal = document.getElementById('qris-modal');
@@ -185,9 +191,10 @@
     }
 
     function prosesPembayaranSukses() {
+        if (checkInterval) clearInterval(checkInterval);
         tutupModalQRIS();
-        document.getElementById("card-pembayaran").style.display = "none";
 
+        document.getElementById("card-pembayaran").style.display = "none";
         const container = document.getElementById("container-tombol-download");
         container.innerHTML = "";
 
