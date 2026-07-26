@@ -119,40 +119,46 @@
     // 1. INI FUNGSI UNTUK AMBIL DATA PRODUK DARI GOOGLE SHEET
     // =========================================================================
     async function muatDataProduk() {
-        try {
-            document.getElementById("status-text").innerText = "Memuat data produk...";
-            
-            const response = await fetch(`${serverUrl}?get_produk=true`);
-            const dbProduk = await response.json();
+    try {
+        document.getElementById("status-text").innerText = "Memuat data produk...";
+        
+        // Ambil data produk dari Google Apps Script
+        const response = await fetch(`${serverUrl}?get_produk=true`);
+        const dbProduk = await response.json();
 
-            // Cari produk berdasarkan parameter URL, fallback ke produk pertama jika tidak ketemu
-            let produkPilihan = dbProduk[namaProdukURL];
-            
-            if (!produkPilihan) {
-                const firstKey = Object.keys(dbProduk)[0];
-                produkPilihan = dbProduk[firstKey] || { harga: 10000, links: [] };
-            }
+        console.log("Data Produk dari Sheet:", dbProduk); // Untuk inspeksi via Inspect Element (Console)
 
-            hargaDasarInput = produkPilihan.harga;
-            listLinkDownload = produkPilihan.links;
-
-            // Jalankan kalkulasi angka unik setelah data produk didapat
-            jalankanKalkulasiAwal();
-            document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
-            
-        } catch (err) {
-            console.error("Gagal memuat produk:", err);
-            document.getElementById("status-text").innerText = "Gagal memuat data produk dari server.";
+        // Cari produk berdasarkan parameter URL
+        let produkPilihan = dbProduk[namaProdukURL];
+        
+        // Jika tidak ketemu berdasarkan key URL, ambil produk baris pertama di Sheet
+        if (!produkPilihan) {
+            const firstKey = Object.keys(dbProduk)[0];
+            produkPilihan = dbProduk[firstKey];
         }
-    }
 
-    function jalankanKalkulasiAwal() {
-        const kodeUnik = Math.floor(Math.random() * 199) + 1;
-        targetNominal = hargaDasarInput + kodeUnik;
+        // Pastikan harga benar-benar dikonversi ke Tipe Number (Gunakan 0 jika undefined/invalid)
+        if (produkPilihan) {
+            hargaDasarInput = Number(produkPilihan.harga) || 0;
+            listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
+        } else {
+            hargaDasarInput = 10000; // Fallback angka jika sheet kosong
+            listLinkDownload = [];
+        }
 
-        document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
-        document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
+        // Jalankan kalkulasi nominal unik
+        jalankanKalkulasiAwal();
+        document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
+        
+    } catch (err) {
+        console.error("Gagal memuat produk dari GAS:", err);
+        document.getElementById("status-text").innerText = "Gagal terhubung ke server database produk.";
+        
+        // Fallback default aman agar web tidak mati / NaN
+        hargaDasarInput = 15000;
+        jalankanKalkulasiAwal();
     }
+}
 
     window.addEventListener('DOMContentLoaded', muatDataProduk);
 
