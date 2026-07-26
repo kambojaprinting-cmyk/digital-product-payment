@@ -62,7 +62,7 @@
 
         <div class="flex flex-col items-center justify-center space-y-1.5 border-t border-gray-100 pt-3 mt-3">
             <div id="status-spinner" class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <p id="status-text" class="text-[11px] text-gray-500 animate-pulse">Menunggu nominal transaksi Anda terdeteksi...</p>
+            <p id="status-text" class="text-[11px] text-gray-500 animate-pulse">Menghubungkan ke database...</p>
         </div>
     </div>
 
@@ -102,124 +102,149 @@
     </div>
 
     <script>
-        const serverUrl = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
-        const urlParams = new URLSearchParams(window.location.search);
-        const namaProdukURL = urlParams.get('produk') || 'kotakita';
+    const serverUrl = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
+    
+    // 1. Ambil parameter URL murni tanpa hardcode default
+    const urlParams = new URLSearchParams(window.location.search);
+    const namaProdukURL = (urlParams.get('produk') || '').toLowerCase().trim();
 
-        let targetNominal = 0;
-        let listLinkDownload = [];
-        let hargaDasarInput = 15000;
+    let targetNominal = 0;
+    let listLinkDownload = [];
+    let hargaDasarInput = 0;
 
-        const formatRupiah = (angka) => {
-            return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        };
+    const formatRupiah = (angka) => {
+        return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    };
 
-        // 1. Dapatkan data produk dinamis dari Google Sheet
-        async function muatDataProduk() {
-            try {
-                const response = await fetch(`${serverUrl}?get_produk=true`);
-                const dbProduk = await response.json();
+    // 2. Load data dinamis dari Google Sheet
+    async function muatDataProduk() {
+        try {
+            document.getElementById("status-text").innerText = "Memuat katalog dinamis...";
+            const response = await fetch(`${serverUrl}?get_produk=true`);
+            const dbProduk = await response.json();
 
-                let produkPilihan = dbProduk[namaProdukURL];
-                if (!produkPilihan) {
-                    const firstKey = Object.keys(dbProduk)[0];
-                    produkPilihan = dbProduk[firstKey];
-                }
-
-                if (produkPilihan) {
-                    hargaDasarInput = Number(produkPilihan.harga) || 15000;
-                    listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
-                }
-            } catch (err) {
-                console.log("Gagal muat dari sheet, menggunakan fallback default");
+            const daftarKey = Object.keys(dbProduk);
+            if (daftarKey.length === 0) {
+                throw new Error("Katalog di Google Sheet kosong!");
             }
-            jalankanKalkulasiAwal();
-        }
 
-        function jalankanKalkulasiAwal() {
-            const kodeUnik = Math.floor(Math.random() * 199) + 1;
-            targetNominal = hargaDasarInput + kodeUnik;
+            let produkPilihan = null;
 
-            document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
-            document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
-        }
-
-        window.addEventListener('DOMContentLoaded', muatDataProduk);
-
-        // 2. Loop Pengecekan Pembayaran (Setiap 4 Detik)
-        const checkInterval = setInterval(() => {
-            if (targetNominal <= 0) return; 
-
-            fetch(`${serverUrl}?check_nominal=${targetNominal}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.status === "SUCCESS") {
-                        prosesPembayaranSukses();
-                    }
-                }).catch(()=>{});
-        }, 4000);
-
-        function bukaModalQRIS() {
-            if (targetNominal <= 0) { alert("Belum ada nominal transaksi!"); return; }
-            const modal = document.getElementById('qris-modal');
-            modal.classList.remove('opacity-0', 'pointer-events-none');
-            modal.classList.add('opacity-100');
-        }
-
-        function tutupModalQRIS() {
-            const modal = document.getElementById('qris-modal');
-            modal.classList.remove('opacity-100');
-            modal.classList.add('opacity-0', 'pointer-events-none');
-        }
-
-        function prosesPembayaranSukses() {
-            clearInterval(checkInterval);
-            tutupModalQRIS(); 
-
-            document.getElementById("card-pembayaran").style.display = "none";
-
-            const container = document.getElementById("container-tombol-download");
-            container.innerHTML = "";
-
-            listLinkDownload.forEach((link, index) => {
-                // SANIASI LINK: Hapus spasi liar & paksa awalan https://
-                let cleanLink = String(link).trim();
-                if (!cleanLink.startsWith("http://") && !cleanLink.startsWith("https://")) {
-                    cleanLink = "https://" + cleanLink;
+            // Jika ada parameter ?produk= di URL, cari match-nya di Sheet
+            if (namaProdukURL) {
+                if (dbProduk[namaProdukURL]) {
+                    produkPilihan = dbProduk[namaProdukURL];
+                } else {
+                    // Cek pencocokan parsial
+                    const matchKey = daftarKey.find(k => k.includes(namaProdukURL) || namaProdukURL.includes(k));
+                    if (matchKey) produkPilihan = dbProduk[matchKey];
                 }
+            }
 
-                // Eksekusi Buka Link
-                window.open(cleanLink, '_blank');
+            // PURE FALLBACK: Jika URL tidak pakai parameter / slug tidak ketemu, 
+            // ambil otomatis BARIS PERTAMA dari Google Sheet (Bukan dari hardcode kode)
+            if (!produkPilihan) {
+                const keyPertama = daftarKey[0];
+                produkPilihan = dbProduk[keyPertama];
+            }
 
-                // Render Tombol Manual
-                const btn = document.createElement("a");
-                btn.href = cleanLink;
-                btn.target = "_blank";
-                btn.rel = "noopener noreferrer";
-                btn.style.cssText = "display: block; width: 100%; background-color: #16a34a; color: #ffffff; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-family: sans-serif; box-sizing: border-box;";
-                
-                btn.innerText = listLinkDownload.length > 1 ? `📥 DOWNLOAD FILE LOGO #${index + 1}` : `📥 DOWNLOAD FILE LOGO SEKARANG`;
-                container.appendChild(btn);
-            });
-
-            document.getElementById("card-sukses").style.display = "block";
+            if (produkPilihan) {
+                hargaDasarInput = Number(produkPilihan.harga) || 0;
+                listLinkDownload = Array.isArray(produkPilihan.links) ? produkPilihan.links : [produkPilihan.links];
+                document.getElementById("status-text").innerText = "Menunggu nominal transaksi Anda terdeteksi...";
+            }
+        } catch (err) {
+            console.error("Gagal membaca database:", err);
+            document.getElementById("status-text").innerText = "Gagal memuat produk dari database.";
         }
+        
+        jalankanKalkulasiAwal();
+    }
 
-        function eksekusiSalin(text) {
-            const el = document.createElement('textarea'); el.value = text;
-            el.setAttribute('readonly', ''); el.style.position = 'absolute'; el.style.left = '-9999px';
-            document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-        }
+    function jalankanKalkulasiAwal() {
+        if (hargaDasarInput <= 0) return;
+        const kodeUnik = Math.floor(Math.random() * 199) + 1;
+        targetNominal = hargaDasarInput + kodeUnik;
 
-        function salinTeks(text, jenis) { eksekusiSalin(text); ubahNotifikasiStatus(`Nomor ${jenis} berhasil disalin!`); }
-        function salinNominalSah() { if (targetNominal <= 0) return; eksekusiSalin(targetNominal.toString()); ubahNotifikasiStatus(`Nominal ${formatRupiah(targetNominal)} disalin!`); }
+        document.getElementById("display-nominal").innerText = formatRupiah(targetNominal);
+        document.getElementById("modal-nominal-warning").innerText = formatRupiah(targetNominal);
+    }
 
-        function ubahNotifikasiStatus(pesan) {
-            const statusText = document.getElementById("status-text");
-            const originalText = statusText.innerText;
-            statusText.innerText = pesan; statusText.classList.remove("text-gray-500"); statusText.classList.add("text-green-600", "font-semibold");
-            setTimeout(() => { statusText.innerText = originalText; statusText.classList.remove("text-green-600", "font-semibold"); statusText.classList.add("text-gray-500"); }, 2000);
-        }
-    </script>
+    window.addEventListener('DOMContentLoaded', muatDataProduk);
+
+    // 3. Polling Pengecekan Transaksi
+    const checkInterval = setInterval(() => {
+        if (targetNominal <= 0) return; 
+
+        fetch(`${serverUrl}?check_nominal=${targetNominal}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.status === "SUCCESS") {
+                    prosesPembayaranSukses();
+                }
+            }).catch(()=>{});
+    }, 4000);
+
+    function bukaModalQRIS() {
+        if (targetNominal <= 0) { alert("Nominal transaksi belum siap!"); return; }
+        const modal = document.getElementById('qris-modal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.classList.add('opacity-100');
+    }
+
+    function tutupModalQRIS() {
+        const modal = document.getElementById('qris-modal');
+        modal.classList.remove('opacity-100');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function prosesPembayaranSukses() {
+        clearInterval(checkInterval);
+        tutupModalQRIS(); 
+
+        document.getElementById("card-pembayaran").style.display = "none";
+
+        const container = document.getElementById("container-tombol-download");
+        container.innerHTML = "";
+
+        listLinkDownload.forEach((link, index) => {
+            if (!link || String(link).trim() === "" || String(link) === "undefined") return;
+
+            let cleanLink = String(link).trim();
+            if (!cleanLink.startsWith("http://") && !cleanLink.startsWith("https://")) {
+                cleanLink = "https://" + cleanLink;
+            }
+
+            window.open(cleanLink, '_blank');
+
+            const btn = document.createElement("a");
+            btn.href = cleanLink;
+            btn.target = "_blank";
+            btn.rel = "noopener noreferrer";
+            btn.style.cssText = "display: block; width: 100%; background-color: #16a34a; color: #ffffff; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-family: sans-serif; box-sizing: border-box;";
+            
+            btn.innerText = listLinkDownload.length > 1 ? `📥 DOWNLOAD FILE #${index + 1}` : `📥 DOWNLOAD FILE SEKARANG`;
+            container.appendChild(btn);
+        });
+
+        document.getElementById("card-sukses").style.display = "block";
+    }
+
+    function eksekusiSalin(text) {
+        const el = document.createElement('textarea'); el.value = text;
+        el.setAttribute('readonly', ''); el.style.position = 'absolute'; el.style.left = '-9999px';
+        document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+    }
+
+    function salinTeks(text, jenis) { eksekusiSalin(text); ubahNotifikasiStatus(`Nomor ${jenis} berhasil disalin!`); }
+    function salinNominalSah() { if (targetNominal <= 0) return; eksekusiSalin(targetNominal.toString()); ubahNotifikasiStatus(`Nominal ${formatRupiah(targetNominal)} disalin!`); }
+
+    function ubahNotifikasiStatus(pesan) {
+        const statusText = document.getElementById("status-text");
+        const originalText = statusText.innerText;
+        statusText.innerText = pesan; statusText.classList.remove("text-gray-500"); statusText.classList.add("text-green-600", "font-semibold");
+        setTimeout(() => { statusText.innerText = originalText; statusText.classList.remove("text-green-600", "font-semibold"); statusText.classList.add("text-gray-500"); }, 2000);
+    }
+</script>
 </body>
 </html>
