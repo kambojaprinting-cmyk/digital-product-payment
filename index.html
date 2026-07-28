@@ -103,10 +103,9 @@
 
    <script>
     // =========================================================================
-    // 1. DUA ENDPOINT WEB APP TERPISAH
+    // HANYA MENGGUNAKAN 1 ENDPOINT WEB APP UNTUK SEMUA OPERASI
     // =========================================================================
-    const serverUrlProduk  = "https://script.google.com/macros/s/AKfycbyStsUVGSQHUf4crVEgVDXa9HvnUs02IKPlKU5TW-o2KBqnSm6D0dRcGVh8SSoEr8vu/exec";
-    const serverUrlPayment = "https://script.google.com/macros/s/AKfycbxvB8rp5L2PXyfCb_IZGGgQc9XXnTRuVoLigIpyapvwiOOyJV6EVXvafmC7-d1NxQDl/exec";
+    const serverUrl = "https://script.google.com/macros/s/GANTI_DENGAN_DEPLOYMENT_ID_BARU/exec";
 
     const urlParams = new URLSearchParams(window.location.search);
     const namaProdukURL = urlParams.get('produk') || 'logo_kotakita'; 
@@ -119,14 +118,13 @@
     };
 
     // =========================================================================
-    // 2. INTI LOGIKA AMBIL DATA DARI SHEET PRODUK
+    // INTI LOGIKA AMBIL DATA DARI SHEET PRODUK
     // =========================================================================
     async function initAplikasiDinamis() {
         document.getElementById("status-text").innerText = "Mengambil data produk...";
 
         try {
-            // Tembak ke serverUrlProduk
-            const res = await fetch(`${serverUrlProduk}?get_produk=${encodeURIComponent(namaProdukURL)}`);
+            const res = await fetch(`${serverUrl}?get_produk=${encodeURIComponent(namaProdukURL)}`);
             const data = await res.json();
 
             if (data.status === "SUCCESS") {
@@ -154,29 +152,27 @@
         }
     }
 
-    // Jalankan otomatis saat web dibuka
     window.addEventListener('DOMContentLoaded', initAplikasiDinamis);
 
     // =========================================================================
-    // 3. LOGIKA CEK PEMBAYARAN KE SHEET PAYMENT
+    // LOGIKA CEK PEMBAYARAN (POLLING)
     // =========================================================================
     let checkInterval = null;
 
     function mulaiPollingPembayaran() {
+        if (checkInterval) return;
+
         checkInterval = setInterval(() => {
             if (targetNominal <= 0) return;
 
-            const noHpPelanggan = urlParams.get('no_hp') || '';
-
-            // Tembak ke serverUrlPayment
-            fetch(`${serverUrlPayment}?gid=0&check_nominal=${targetNominal}&no_hp=${noHpPelanggan}`)
+            fetch(`${serverUrl}?check_nominal=${targetNominal}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data && (data.status === "PAID" || data.status === "SUCCESS" || data.status === "SUKSES" || data.status === "BERHASIL" || data.status === "LUNAS")) {
                         prosesPembayaranSukses();
                     }
                 }).catch(() => {});
-        }, 4000);
+        }, 3500); // Polling setiap 3.5 detik
     }
 
     function bukaModalQRIS() {
@@ -196,10 +192,8 @@
         if (checkInterval) clearInterval(checkInterval);
         tutupModalQRIS();
 
-        // Sembunyikan kartu pembayaran
         document.getElementById("card-pembayaran").style.display = "none";
 
-        // Render tombol download
         const container = document.getElementById("container-tombol-download");
         container.innerHTML = "";
 
